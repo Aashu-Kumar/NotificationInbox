@@ -8,7 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.aashu.notificationinbox.ui.screens.InboxScreen
+import com.aashu.notificationinbox.navigation.AppNavigation
 import com.aashu.notificationinbox.ui.theme.NotificationInboxTheme
 
 class MainActivity : ComponentActivity() {
@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize()
                 ) {
 
-                    InboxScreen()
+                    AppNavigation()
                 }
             }
         }
