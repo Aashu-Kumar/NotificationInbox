@@ -3,19 +3,24 @@ package com.aashu.notificationinbox.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.aashu.notificationinbox.ui.model.NotificationItem
-import com.aashu.notificationinbox.ui.model.SampleNotifications
+import com.aashu.notificationinbox.NotificationInboxApplication
 import com.aashu.notificationinbox.ui.screens.InboxScreen
 import com.aashu.notificationinbox.ui.screens.NotificationDetailsScreen
+import com.aashu.notificationinbox.ui.viewmodel.NotificationViewModel
 
 private object AppRoutes {
+
     const val INBOX = "inbox"
     const val DETAILS = "details/{notificationId}"
 
@@ -29,10 +34,23 @@ fun AppNavigation() {
 
     val navController = rememberNavController()
 
-    val notifications = remember {
-        mutableStateListOf<NotificationItem>().apply {
-            addAll(SampleNotifications.items)
-        }
+    // Get the Application instance.
+    val context = LocalContext.current
+    val application = context.applicationContext as NotificationInboxApplication
+
+    // Create the ViewModel using our Repository.
+    val notificationViewModel: NotificationViewModel = viewModel(
+        factory = NotificationViewModel.factory(
+            application.repository
+        )
+    )
+
+    // Observe notifications stored in Room.
+    val notifications by notificationViewModel.notifications.collectAsState()
+
+    // Insert sample notifications only if the database is empty.
+    LaunchedEffect(Unit) {
+        notificationViewModel.seedSampleNotificationsIfEmpty()
     }
 
     NavHost(
@@ -40,35 +58,25 @@ fun AppNavigation() {
         startDestination = AppRoutes.INBOX
     ) {
 
+        // Inbox screen.
         composable(AppRoutes.INBOX) {
 
             InboxScreen(
                 notifications = notifications,
                 onNotificationClick = { notificationId ->
 
-                    val index = notifications.indexOfFirst {
-                        it.id == notificationId
-                    }
+                    // Mark as read in the database.
+                    notificationViewModel.markAsRead(notificationId)
 
-                    if (index != -1) {
-
-                        val selectedNotification = notifications[index]
-
-                        // Mark as read before opening details.
-                        if (!selectedNotification.isRead) {
-
-                            notifications[index] =
-                                selectedNotification.copy(isRead = true)
-                        }
-
-                        navController.navigate(
-                            AppRoutes.details(notificationId)
-                        )
-                    }
+                    // Navigate to notification details.
+                    navController.navigate(
+                        AppRoutes.details(notificationId)
+                    )
                 }
             )
         }
 
+        // Notification details screen.
         composable(
             route = AppRoutes.DETAILS,
             arguments = listOf(
@@ -81,16 +89,38 @@ fun AppNavigation() {
             val notificationId = backStackEntry.arguments
                 ?.getString("notificationId")
 
-            val selectedNotification = notifications.firstOrNull {
-                it.id == notificationId
-            }
+            if (notificationId != null) {
 
-            NotificationDetailsScreen(
-                notification = selectedNotification,
-                onBackClick = {
-                    navController.popBackStack()
+                // Observe the selected notification from Room.
+                val notificationFlow = remember(
+                    notificationViewModel,
+                    notificationId
+                ) {
+                    notificationViewModel.getNotificationById(
+                        notificationId
+                    )
                 }
-            )
+
+                val selectedNotification by notificationFlow.collectAsState(
+                    initial = null
+                )
+
+                NotificationDetailsScreen(
+                    notification = selectedNotification,
+                    onBackClick = {
+                        navController.popBackStack()
+                    }
+                )
+
+            } else {
+
+                NotificationDetailsScreen(
+                    notification = null,
+                    onBackClick = {
+                        navController.popBackStack()
+                    }
+                )
+            }
         }
     }
 }
